@@ -44,15 +44,26 @@ fun LegacyApp(vm: LegacyViewModel = viewModel()) {
 
 @Composable
 private fun CreateFamilyScreen(
-    onCreate: (String, String, Sex, LocalDate, String, String, Double, LocalDate) -> Unit
+    onCreate: (
+        String,
+        String,
+        Sex,
+        LocalDate,
+        String,
+        String,
+        Double,
+        Int
+    ) -> Unit
 ) {
     var familyName by remember { mutableStateOf("") }
     var personName by remember { mutableStateOf("") }
     var country by remember { mutableStateOf("Portugal") }
     var city by remember { mutableStateOf("Lisboa") }
-    var birthYear by remember { mutableStateOf("1996") }
-    var capital by remember { mutableStateOf("10000") }
+    var birthDateText by remember { mutableStateOf("01/01/1996") }
+    var startYearText by remember { mutableStateOf("2026") }
+    var capitalText by remember { mutableStateOf("10000") }
     var sex by remember { mutableStateOf(Sex.MASCULINO) }
+    var error by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier
@@ -67,16 +78,18 @@ private fun CreateFamilyScreen(
 
         OutlinedTextField(
             value = familyName,
-            onValueChange = { familyName = it },
+            onValueChange = { familyName = it; error = null },
             label = { Text("Nome da família") },
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(12.dp))
 
         OutlinedTextField(
             value = personName,
-            onValueChange = { personName = it },
+            onValueChange = { personName = it; error = null },
             label = { Text("Nome do personagem principal") },
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(12.dp))
@@ -91,51 +104,92 @@ private fun CreateFamilyScreen(
         Spacer(Modifier.height(12.dp))
 
         OutlinedTextField(
-            value = birthYear,
-            onValueChange = { birthYear = it },
-            label = { Text("Ano de nascimento") },
+            value = birthDateText,
+            onValueChange = { birthDateText = it; error = null },
+            label = { Text("Data de nascimento (dd/MM/yyyy)") },
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(12.dp))
 
         OutlinedTextField(
             value = country,
-            onValueChange = { country = it },
+            onValueChange = { country = it; error = null },
             label = { Text("País") },
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(12.dp))
 
         OutlinedTextField(
             value = city,
-            onValueChange = { city = it },
+            onValueChange = { city = it; error = null },
             label = { Text("Cidade") },
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(12.dp))
 
         OutlinedTextField(
-            value = capital,
-            onValueChange = { capital = it },
-            label = { Text("Capital inicial (€)") },
+            value = startYearText,
+            onValueChange = { startYearText = it; error = null },
+            label = { Text("Ano de início da partida") },
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = capitalText,
+            onValueChange = { capitalText = it; error = null },
+            label = { Text("Capital inicial (€)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        if (error != null) {
+            Spacer(Modifier.height(12.dp))
+            Text(error!!, color = MaterialTheme.colorScheme.error)
+        }
+
         Spacer(Modifier.height(24.dp))
 
         Button(
             onClick = {
-                val year = birthYear.toIntOrNull() ?: 1996
-                val money = capital.toDoubleOrNull() ?: 0.0
-                onCreate(
-                    familyName.ifBlank { "Família Sem Nome" },
-                    personName.ifBlank { "Personagem" },
-                    sex,
-                    LocalDate.of(year, 1, 1),
-                    country.ifBlank { "Portugal" },
-                    city.ifBlank { "Lisboa" },
-                    money,
-                    LocalDate.of(year + 30, 1, 1)
-                )
+                val birthDate = runCatching {
+                    LocalDate.parse(
+                        birthDateText,
+                        DateTimeFormatter.ofPattern("dd/MM/yyyy")
+                    )
+                }.getOrNull()
+                val startYear = startYearText.toIntOrNull()
+                val capital = capitalText.replace(",", ".").toDoubleOrNull()
+
+                error = when {
+                    familyName.isBlank() -> "Indica o nome da família."
+                    personName.isBlank() -> "Indica o nome do personagem principal."
+                    birthDate == null -> "A data de nascimento deve estar no formato dd/MM/yyyy."
+                    startYear == null || startYear !in 1800..2200 ->
+                        "Indica um ano de início válido (1800–2200)."
+                    birthDate.year > startYear ->
+                        "O ano de início não pode ser anterior ao nascimento."
+                    capital == null || capital < 0 ->
+                        "Indica um capital inicial válido."
+                    else -> null
+                }
+
+                if (error == null) {
+                    onCreate(
+                        familyName.trim(),
+                        personName.trim(),
+                        sex,
+                        birthDate!!,
+                        country.trim().ifBlank { "Portugal" },
+                        city.trim().ifBlank { "Lisboa" },
+                        capital!!,
+                        startYear!!
+                    )
+                }
             },
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -155,18 +209,18 @@ private fun GameScreen(game: GameState, onNextMonth: () -> Unit) {
             .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
-        Text("Família ${game.family.name}", style = MaterialTheme.typography.headlineMedium)
-        Text(game.currentDate.format(formatter))
+        Text("Família \${game.family.name}", style = MaterialTheme.typography.headlineMedium)
+        Text("Início: \${game.currentDate.format(formatter)}")
         Spacer(Modifier.height(20.dp))
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Text(person.name, style = MaterialTheme.typography.titleLarge)
-                Text("${person.ageAt(game.currentDate)} anos")
-                Text("${person.city}, ${person.country}")
-                Text("Dinheiro: €${"%.2f".format(person.money)}")
-                Text("Profissão: ${person.profession}")
-                Text("Saúde: ${person.health}/100")
+                Text("\${person.ageAt(game.currentDate)} anos")
+                Text("\${person.city}, \${person.country}")
+                Text("Dinheiro: €\${"%.2f".format(person.money)}")
+                Text("Profissão: \${person.profession}")
+                Text("Saúde: \${person.health}/100")
             }
         }
 
