@@ -21,8 +21,9 @@ class LegacyViewModel : ViewModel() {
         country: String,
         city: String,
         capital: Double,
-        startDate: LocalDate
+        startYear: Int
     ) {
+        val startDate = LocalDate.of(startYear, 1, 1)
         val person = Person(
             name = personName,
             sex = sex,
